@@ -31,7 +31,7 @@ DNA_PRINT_FlAGS GetPrintFlag(char *sp, char *ep)
     return 0;
 }
 
-void *test_genetics(void *user_data, const char *line)
+void *test_genetics(void *user_data, const char *line, size_t size)
 {
     FILE *out = NULL;
     if (!user_data)
@@ -113,6 +113,8 @@ void *test_genetics(void *user_data, const char *line)
         else
         {
             Genetics_StartDNA(user_data, DNA_DIR_5_TO_3, line + 2);
+            if (line[size - 1] == '\'' && line[size - 2] == '3')
+                Genetics_StopDNA(user_data);
         }
         return user_data;
     }
@@ -125,6 +127,8 @@ void *test_genetics(void *user_data, const char *line)
         else
         {
             Genetics_StartDNA(user_data, DNA_DIR_3_TO_5, line + 2);
+            if (line[size - 1] == '\'' && line[size - 2] == '5')
+                Genetics_StopDNA(user_data);
         }
         return user_data;
     }
@@ -134,7 +138,6 @@ void *test_genetics(void *user_data, const char *line)
         ParseParams((char *)line + 11, 1, &codon_start);
         if (*codon_start >= '1' && *codon_start <= '3')
         {
-
             Genetics_SetCodonStart(user_data, *codon_start - '0');
         }
         else

@@ -13,7 +13,7 @@
 
 #include "tests.h"
 
-typedef void *(*TFunc)(void *user_data, const char *line);
+typedef void *(*TFunc)(void *user_data, const char *line, size_t size);
 struct test_menu
 {
     const char *command;
@@ -42,11 +42,12 @@ static int menu_index = -1;
 bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize)
 {
     size_t term = insize - 1;
-    while (input[term] == '\r' || input[term] == '\n')
+    while (isspace(input[term]))
     {
         input[term] = 0;
         term--;
     }
+    term++;
     char *line = input;
     while (isspace(*line))
         line++;
@@ -106,11 +107,11 @@ bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize)
 
     if (fromFile)
     {
-        test_menus[menu_index].user_data = test_menus[menu_index].controler(test_menus[menu_index].user_data, line);
+        test_menus[menu_index].user_data = test_menus[menu_index].controler(test_menus[menu_index].user_data, line, term);
     }
     else
     {
-        test_menus[menu_index].user_data = test_menus[menu_index].controler(test_menus[menu_index].user_data, line);
+        test_menus[menu_index].user_data = test_menus[menu_index].controler(test_menus[menu_index].user_data, line, term);
         printf(PROMPT_CMD, test_menus[menu_index].command);
     }
 
@@ -189,7 +190,7 @@ int main(int argc, char **argv)
     for (int i = 0; test_menus[i].command; i++)
     {
         if (test_menus[menu_index].user_data)
-            test_menus[menu_index].controler(test_menus[menu_index].user_data, NULL);
+            test_menus[menu_index].controler(test_menus[menu_index].user_data, NULL,0);
     }
     return 0;
 }
