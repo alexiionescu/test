@@ -1,0 +1,33 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.deps": true,
+			"**/.dirstamp": true,
+			"**/.libs": true,
+			"**/*.in": true,
+			"**/*.o": true,
+			"**/*.lo": true,
+			"**/*.la": true,
+			"**/*.so": true,
+			"aclocal.m4": true,
+			"autom4te.cache": true,
+			"config.*": true,
+			"configure": true,
+			"install-sh": true,
+			"libtool": true,
+			"m4": true,
+			"missing": true,
+			"stamp-h1":true,
+			"ltmain.sh":true,
+			"ar-lib":true,
+			"compile":true,
+			"Makefile":true,
+			"depcomp":true
+		}
+	}
+}
