@@ -28,6 +28,8 @@ DNA_PRINT_FlAGS GetPrintFlag(char *sp, char *ep)
         return DNA_PRINT_REVERSE;
     if (!strncasecmp("rna", sp, ep - sp))
         return DNA_PRINT_RNA;
+    if (!strncasecmp("cor", sp, ep - sp))
+        return DNA_PRINT_TRANSLATE_CORRELATE;  
     return 0;
 }
 

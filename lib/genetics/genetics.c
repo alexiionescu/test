@@ -56,6 +56,8 @@ struct _GeneticsObj
     CODON_BASE lastCodonBase;
     FILE *out;
     uint8_t start_codon;
+    size_t inputFileOffset;
+    bool fileBegin;
 };
 
 static int transl_table = 0;
@@ -197,6 +199,8 @@ void Genetics_StartDNA(GeneticsObj *_this, DNA_DIR dir, const char *code)
     _this->dna[0] = 0;
     _this->lastCodonBase = CODON_1stBase;
     _this->start_codon = 1;
+    _this->inputFileOffset = 0;
+    _this->fileBegin = true;
     Genetics_AddDNA(_this, code);
 }
 
@@ -226,25 +230,34 @@ void Genetics_AddDNA(GeneticsObj *_this, const char *code)
             case 'T':
             case 't':
                 _this->lastCodonBase -= 2;
+                if(_this->fileBegin) _this->fileBegin = false; 
                 break;
             case 'U':
             case 'u':
                 _this->lastCodonBase -= 2;
+                if(_this->fileBegin) _this->fileBegin = false; 
                 break;
             case 'C':
             case 'c':
                 _this->dna[_this->dnaSize] |= 1 << _this->lastCodonBase;
                 _this->lastCodonBase -= 2;
+                if(_this->fileBegin) _this->fileBegin = false; 
                 break;
             case 'A':
             case 'a':
                 _this->dna[_this->dnaSize] |= 2 << _this->lastCodonBase;
                 _this->lastCodonBase -= 2;
+                if(_this->fileBegin) _this->fileBegin = false; 
                 break;
             case 'G':
             case 'g':
                 _this->dna[_this->dnaSize] |= 3 << _this->lastCodonBase;
                 _this->lastCodonBase -= 2;
+                if(_this->fileBegin) _this->fileBegin = false; 
+                break;
+            case 'N':
+            case 'n':
+                if(_this->fileBegin) _this->inputFileOffset++;
                 break;
             }
             if (_this->lastCodonBase < 0)
@@ -296,23 +309,36 @@ bool Genetics_DNAInput(GeneticsObj *_this)
 }
 
 #define PSTATE_NA -1
-#define START_LINE_FMT  "\n%8lu "
-static void PrintCodon(GeneticsObj *_this, size_t i, uint8_t codon,
-                       DNA_PRINT_FlAGS flags, int *pstate)
+#define START_LINE_FMT      "\n%9lu "
+#define START_LINE_EMPTY "\n          " //same spaces as START_LINE_FMT empty 
+#define CODONS_PER_LINE 20
+static void PrintCodon(FILE* out, size_t i, uint8_t codon,
+                       DNA_PRINT_FlAGS flags, int *pstate, size_t poffset, size_t printOffset)
 {
     if (flags & DNA_PRINT_REVERSE)
         codon = REVERSE_CODON(codon);
     if (flags & DNA_PRINT_COMPLEMENT)
         codon = COMPLEMENT_CODON(codon);
     bool translChanged = false;
+
     if (flags & (DNA_PRINT_TRANSLATE | DNA_PRINT_TRANSLATE_LONG))
     {
         if (*pstate == PSTATE_NA && STARTS_TABLE[codon] == 'M')
         {
-            if (flags & DNA_PRINT_TRANSLATE)
-                fprintf(_this->out, START_LINE_FMT "M", i * 3 + _this->start_codon);
+            if(flags&DNA_PRINT_TRANSLATE_CORRELATE)
+            {
+                if (flags & DNA_PRINT_TRANSLATE)
+                    fputs("M   ",out);
+                else
+                    fputs("Met-",out);
+            }
             else
-                fprintf(_this->out, START_LINE_FMT "Met", i * 3 + _this->start_codon);
+            {
+                if (flags & DNA_PRINT_TRANSLATE)
+                    fprintf(out, START_LINE_FMT "M", poffset);
+                else
+                    fprintf(out, START_LINE_FMT "Met-", poffset);    
+            }
             translChanged = true;
             *pstate = i;
         }
@@ -323,71 +349,81 @@ static void PrintCodon(GeneticsObj *_this, size_t i, uint8_t codon,
                 translChanged = true;
                 *pstate = PSTATE_NA;
             }
-            else if (STARTS_TABLE[codon] == 'M')
-            {
-                //fputc('>',_this->out); //alternative starts
-            }
         }
     }
 
     if (flags & DNA_PRINT_TRANSLATE)
     {
-        if (!translChanged && *pstate != PSTATE_NA && (i - *pstate) % 60 == 0)
-            fprintf(_this->out, " ..." START_LINE_FMT, i * 3 + _this->start_codon);
+        if(!(flags&DNA_PRINT_TRANSLATE_CORRELATE))
+        {
+            if (!translChanged && *pstate != PSTATE_NA && ((flags & DNA_PRINT_REVERSE) ? (*pstate - i) % 60 : (i - *pstate) % 60) == 0)
+                fprintf(out, " ..." START_LINE_FMT, poffset);
+        }
     }
     else if (flags & DNA_PRINT_TRANSLATE_LONG)
     {
-        if (!translChanged && *pstate != PSTATE_NA)
+        if(!(flags&DNA_PRINT_TRANSLATE_CORRELATE))
         {
-            if ((i - *pstate) % 20 == 0)
-                fprintf(_this->out, " ..." START_LINE_FMT, i * 3 + _this->start_codon);
-            else
-                fputc('-', _this->out);
-        }
+            if (!translChanged && *pstate != PSTATE_NA)
+            {
+                if (((flags & DNA_PRINT_REVERSE) ? (*pstate - i) % 20 : (i - *pstate) % 20) == 0)
+                    fprintf(out, " ..." START_LINE_FMT, poffset);                
+            }         
+        }        
     }
     else
     {
-        size_t offset = i;
-        if (flags & DNA_PRINT_REVERSE) 
-            offset = _this->dnaSize - i - 1;
-        if (offset % 20 == 0)
+        if (printOffset % CODONS_PER_LINE == 0)
         {
-            size_t poffset = i * 3 + _this->start_codon;   
-            if (flags & DNA_PRINT_REVERSE) 
-                poffset += 2;
-            fprintf(_this->out, START_LINE_FMT, poffset);
+            fprintf(out, START_LINE_FMT, poffset);
         }
-        else
+        else 
         {
-            if (offset % 4 == 0)
-                fputc(' ', _this->out);
+            fputc(' ', out);
         }
     }
 
     if (flags & DNA_PRINT_TRANSLATE)
     {
-        if (!translChanged && *pstate != PSTATE_NA)
-            fputc(TRANSL_TABLE[codon], _this->out);
+        if (!translChanged){ 
+            if(*pstate != PSTATE_NA)
+            {
+                fputc(TRANSL_TABLE[codon], out);
+                if(flags&DNA_PRINT_TRANSLATE_CORRELATE)
+                    fputs("   ",out);
+            }
+            else if(flags&DNA_PRINT_TRANSLATE_CORRELATE)
+                fputs("    ",out);
+        }
+        else if(translChanged && *pstate == PSTATE_NA && flags&DNA_PRINT_TRANSLATE_CORRELATE)
+            fputs("    ",out);
     }
     else if (flags & DNA_PRINT_TRANSLATE_LONG)
     {
-        if (!translChanged && *pstate != PSTATE_NA)
-            fputs(TRANSL_TABLE_LONG[codon], _this->out);
+        if (!translChanged)
+        { 
+            if(*pstate != PSTATE_NA)
+            {
+                fputs(TRANSL_TABLE_LONG[codon], out);
+                fputc('-',out);
+            }
+            else if(flags&DNA_PRINT_TRANSLATE_CORRELATE)
+                fputs("    ",out);
+        }
+        else if(translChanged && *pstate == PSTATE_NA && flags&DNA_PRINT_TRANSLATE_CORRELATE)
+            fputs("    ",out);
     }
     else
     {
         if (flags & DNA_PRINT_RNA)
-            fputs(RNA_STRINGS[codon], _this->out);
+            fputs(RNA_STRINGS[codon], out);
         else
-            fputs(DNA_STRINGS[codon], _this->out);
+            fputs(DNA_STRINGS[codon], out);
     }
 }
 
 static void PrintLastCodon(GeneticsObj *_this, uint8_t codon, DNA_PRINT_FlAGS flags)
 {
-    if (flags & (DNA_PRINT_TRANSLATE | DNA_PRINT_TRANSLATE_LONG))
-        return;
-
     int side = 2;
     int mid = 1;
     if (flags & DNA_PRINT_REVERSE)
@@ -442,9 +478,9 @@ static void PrintHeader(GeneticsObj *_this, bool begin, DNA_PRINT_FlAGS flags)
     if (flags & (DNA_PRINT_TRANSLATE | DNA_PRINT_TRANSLATE_LONG))
     {
         if (begin)
-            fputs("\nNH2", _this->out);
+            fputs("\nH-", _this->out);
         else
-            fputs("\nCOOH", _this->out);
+            fputs("\n-OH", _this->out);
     }
     else
     {
@@ -489,19 +525,64 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
     if (flags & DNA_PRINT_REVERSE)
     {
         PrintHeader(_this, true, flags);
+        size_t poffset = (printSize - 1) * 3 - _this->start_codon + 1 + _this->inputFileOffset;
+        size_t printOffset = 0;
         if (_this->start_codon != 1 || _this->lastCodonBase != CODON_1stBase)
         {
             printSize--;
+            poffset -= 3;
             if (_this->start_codon == 3 && _this->lastCodonBase == CODON_2ndBase)
+            {
                 printSize--;
+                poffset -= 3;
+            }
             if (3 - _this->start_codon != _this->lastCodonBase / 2){
-                fprintf(_this->out,START_LINE_FMT,(size_t)(printSize + 1) * 3 - _this->start_codon + 1);
-                PrintLastCodon(_this, _this->dna[printSize], flags);
+                fprintf(_this->out,START_LINE_FMT,poffset);
+                if (!(flags & (DNA_PRINT_TRANSLATE | DNA_PRINT_TRANSLATE_LONG)))
+                {
+                    PrintLastCodon(_this, _this->dna[printSize], flags);
+                    printOffset++;
+                }
+                if(flags&DNA_PRINT_TRANSLATE_CORRELATE) 
+                    fputs("   ",_this->out);
             }
         }
-        for (int r = printSize - 1; r >= 0; r--)
+
+        bool printCorrelation = false;
+        bool endCorrelation = false;
+        DNA_PRINT_FlAGS pflags = flags;
+        size_t cor_r = printSize - 1, cor_poffset = poffset;
+        if(flags&DNA_PRINT_TRANSLATE_CORRELATE) 
+            pflags = flags & ~(DNA_PRINT_TRANSLATE_LONG|DNA_PRINT_TRANSLATE);
+        for (int r = printSize - 1; r >= 0; r--, poffset -= 3,printOffset++)
         {
-            PrintCodon(_this, r, _this->dna[r], flags, &pstate);
+            if(flags&DNA_PRINT_TRANSLATE_CORRELATE && r != printSize - 1 && printOffset % CODONS_PER_LINE == 0 && !endCorrelation) 
+            {
+                printCorrelation = !printCorrelation;
+                if(printCorrelation)
+                {
+                    r = cor_r;
+                    poffset = cor_poffset; 
+                    fputs(START_LINE_EMPTY,_this->out);
+                    pflags = flags;
+                }
+                else
+                {
+                    cor_r = r;
+                    cor_poffset = poffset;
+                    pflags = flags & ~(DNA_PRINT_TRANSLATE_LONG|DNA_PRINT_TRANSLATE);
+                }
+            }
+            PrintCodon(_this->out, r, _this->dna[r], pflags, &pstate, poffset, printOffset);
+            if(flags&DNA_PRINT_TRANSLATE_CORRELATE && !printCorrelation && r == 0) 
+            {
+                printCorrelation = true;
+                endCorrelation = true;
+                r = cor_r + 1;
+                poffset = cor_poffset + 3; 
+                fputs(START_LINE_EMPTY,_this->out);
+                pflags = flags;
+            }
         }
         PrintHeader(_this, false, flags);
     }
@@ -514,14 +595,51 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
                 printSize--;
         }
         PrintHeader(_this, true, flags);
-        for (size_t i = 0; i < printSize; i++)
+        size_t poffset = _this->start_codon + _this->inputFileOffset;
+        bool printCorrelation = false;
+        bool endCorrelation = false;
+        DNA_PRINT_FlAGS pflags = flags;
+        size_t cor_i = 0, cor_poffset = poffset;
+        if(flags&DNA_PRINT_TRANSLATE_CORRELATE) 
+            pflags = flags & ~(DNA_PRINT_TRANSLATE_LONG|DNA_PRINT_TRANSLATE);
+        for (size_t i = 0; i < printSize; i++, poffset += 3)
         {
-            PrintCodon(_this, i, _this->dna[i], flags, &pstate);
+            if(flags&DNA_PRINT_TRANSLATE_CORRELATE && i > 0 && i % CODONS_PER_LINE == 0 && !endCorrelation) 
+            {
+                printCorrelation = !printCorrelation;
+                 if(printCorrelation)
+                {
+                    i = cor_i;
+                    poffset = cor_poffset; 
+                    fputs("\n         ",_this->out);
+                    pflags = flags;
+                }
+                else
+                {
+                    cor_i = i;
+                    cor_poffset = poffset;
+                    pflags = flags & ~(DNA_PRINT_TRANSLATE_LONG|DNA_PRINT_TRANSLATE);
+                }
+            }
+            PrintCodon(_this->out, i, _this->dna[i], pflags, &pstate, poffset, i);
+            if(flags&DNA_PRINT_TRANSLATE_CORRELATE && !printCorrelation && i == printSize - 1) 
+            {
+                printCorrelation = true;
+                endCorrelation = true;
+                fputs("\n         ",_this->out);
+                i = cor_i - 1;
+                poffset = cor_poffset - 3; 
+                pflags = flags;
+            }
         }
         if (_this->start_codon != 1 || _this->lastCodonBase != CODON_1stBase)
         {
             if (3 - _this->start_codon != _this->lastCodonBase / 2)
-                PrintLastCodon(_this, _this->dna[printSize], flags);
+            {
+                fputc(' ',_this->out);
+                if (!(flags & (DNA_PRINT_TRANSLATE | DNA_PRINT_TRANSLATE_LONG)))
+                    PrintLastCodon(_this, _this->dna[printSize], flags);
+            }
         }
         PrintHeader(_this, false, flags);
     }

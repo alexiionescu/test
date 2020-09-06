@@ -18,6 +18,7 @@ void Genetics_LoadFASTA(GeneticsObj *_this, const char *filename, const char *se
 #define DNA_PRINT_RNA 0x0004
 #define DNA_PRINT_TRANSLATE 0x0008
 #define DNA_PRINT_TRANSLATE_LONG 0x0010
+#define DNA_PRINT_TRANSLATE_CORRELATE 0x0020
 typedef uint32_t DNA_PRINT_FlAGS;
 
 void Genetics_Print(GeneticsObj *_this, const char *s);
