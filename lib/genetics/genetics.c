@@ -184,8 +184,10 @@ void Genetics_SetCodonStart(GeneticsObj *_this, int n)
  *              DNA_DIR_5_TO_3 : 5' to 3' strand
  *              DNA_DIR_3_TO_5 : 3' to 5' strand
  * @param code DNA code: a string containing letters A T(U) G C
+ * 
+ * @return number of bp added
  */
-void Genetics_StartDNA(GeneticsObj *_this, DNA_DIR dir, const char *code)
+size_t Genetics_StartDNA(GeneticsObj *_this, DNA_DIR dir, const char *code)
 {
     _this->dnaInput = true;
     if (_this->dnaAllocSize == 0)
@@ -201,7 +203,7 @@ void Genetics_StartDNA(GeneticsObj *_this, DNA_DIR dir, const char *code)
     _this->start_codon = 1;
     _this->inputFileOffset = 0;
     _this->fileBegin = true;
-    Genetics_AddDNA(_this, code);
+    return Genetics_AddDNA(_this, code);
 }
 
 /**
@@ -209,11 +211,14 @@ void Genetics_StartDNA(GeneticsObj *_this, DNA_DIR dir, const char *code)
  * 
  * @param _this genetics object
  * @param code DNA code: a string containing letters A T(U) G C
+ * 
+ * @return number of bp added
  */
-void Genetics_AddDNA(GeneticsObj *_this, const char *code)
+size_t Genetics_AddDNA(GeneticsObj *_this, const char *code)
 {
     if (*code == ';' || *code == '>')
-        return; //FASTA lines
+        return 0; //FASTA lines
+    size_t bp = 0;
     if (_this->dnaInput)
     {
         size_t codeSize = strlen(code);
@@ -231,29 +236,34 @@ void Genetics_AddDNA(GeneticsObj *_this, const char *code)
             case 't':
                 _this->lastCodonBase -= 2;
                 if(_this->fileBegin) _this->fileBegin = false; 
+                bp++;
                 break;
             case 'U':
             case 'u':
                 _this->lastCodonBase -= 2;
                 if(_this->fileBegin) _this->fileBegin = false; 
+                bp++;
                 break;
             case 'C':
             case 'c':
                 _this->dna[_this->dnaSize] |= 1 << _this->lastCodonBase;
                 _this->lastCodonBase -= 2;
                 if(_this->fileBegin) _this->fileBegin = false; 
+                bp++;
                 break;
             case 'A':
             case 'a':
                 _this->dna[_this->dnaSize] |= 2 << _this->lastCodonBase;
                 _this->lastCodonBase -= 2;
                 if(_this->fileBegin) _this->fileBegin = false; 
+                bp++;
                 break;
             case 'G':
             case 'g':
                 _this->dna[_this->dnaSize] |= 3 << _this->lastCodonBase;
                 _this->lastCodonBase -= 2;
                 if(_this->fileBegin) _this->fileBegin = false; 
+                bp++;
                 break;
             case 'N':
             case 'n':
@@ -273,6 +283,7 @@ void Genetics_AddDNA(GeneticsObj *_this, const char *code)
     {
         fprintf(_this->out, "warning Genetics_AddDNA without DNA Start");
     }
+    return bp;
 }
 
 /**
@@ -532,7 +543,7 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
     if (flags & DNA_PRINT_REVERSE)
     {
         PrintHeader(_this, true, flags);
-        size_t poffset = (printSize - 1) * 3 - _this->start_codon + 1 + _this->inputFileOffset;
+        size_t poffset = printSize * 3 - _this->start_codon + 1 + _this->inputFileOffset;
         size_t printOffset = 0;
         if (_this->start_codon != 1 || _this->lastCodonBase != CODON_1stBase)
         {
@@ -643,7 +654,7 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
                 {
                     i = cor_i;
                     poffset = cor_poffset; 
-                    fputs("\n         ",_this->out);
+                    fputs(START_LINE_EMPTY,_this->out);
                     pflags = flags;
                 }
                 else
@@ -658,7 +669,7 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
             {
                 printCorrelation = true;
                 endCorrelation = true;
-                fputs("\n         ",_this->out);
+                fputs(START_LINE_EMPTY,_this->out);
                 i = cor_i - 1;
                 poffset = cor_poffset - 3; 
                 pflags = flags;
@@ -692,25 +703,34 @@ void Genetics_Print(GeneticsObj *_this, const char *s)
  * @brief Load a FASTA file
  * 
  * @param _this genetics object
+ * @param start dna bp start
+ * @param stop  dna bp stop
  * @param filename   FASTA file name
  * @param search    string to search for in ^> lines. when found will load dna from next line to the next ^> line
  */
-void Genetics_LoadFASTA(GeneticsObj *_this, const char *filename, const char *search)
+void Genetics_LoadFASTA(GeneticsObj *_this, size_t start, size_t stop, const char *filename, const char *search)
 {
     size_t len = 0;
     char *input = NULL;
     ssize_t insize;
     FILE *fInput = NULL;
     fInput = fopen(filename, "r");
+    size_t lines = 0;
     if (!fInput)
     {
         fprintf(stderr, "Error fopening fasta file '%s' : %s\n", filename, strerror(errno));
         return;
     }
+    if(start > 0 && stop <= start)
+    {
+        fprintf(stderr, "Error fopening fasta file '%s' : stop %lu is less then start %lu\n", filename, stop,start);
+        return;
+    }
     fprintf(_this->out, "Load FASTA file '%s' searching for '%s'\n", filename, search);
     bool bFound = false;
     Genetics_StartDNA(_this, DNA_DIR_5_TO_3, "");
-    while (-1 != (insize = getline(&input, &len, fInput)))
+    size_t read;
+    while (-1 != (read = (insize = getline(&input, &len, fInput))))
     {
         if (*input == ';')
         { //fasta commented line
@@ -723,11 +743,32 @@ void Genetics_LoadFASTA(GeneticsObj *_this, const char *filename, const char *se
                 fputs(input, _this->out);
             continue;
         }
-        if (bFound) //dna line
-            Genetics_AddDNA(_this, input);
+        if (bFound)
+        {
+            if(start > 0){
+                if(_this->inputFileOffset == 0)
+                {
+                    start--;
+                    _this->inputFileOffset = start;
+                    fseek(fInput, _this->inputFileOffset + _this->inputFileOffset / (read - 1) - read,SEEK_CUR);
+                    continue;
+                }
+                else if(start + read - 1 > stop)
+                {
+                    input[stop - start] = 0;
+                }   
+            }
+            start += Genetics_AddDNA(_this, input);
+            lines++;
+
+            if(start == stop)
+            {
+                break;
+            }
+        }
     }
     Genetics_StopDNA(_this);
-    fprintf(_this->out, "FASTA loaded. Found %lu bp.\n", _this->dnaSize * 3);
+    fprintf(_this->out, "FASTA loaded. Found %lu bp on %lu lines.\n", _this->dnaSize * 3, lines);
     fclose(fInput);
     free(input);
 }

@@ -55,9 +55,9 @@ void *test_genetics(void *user_data, const char *line, size_t size, FILE* out)
     }
     if (!strncasecmp("load_fasta", line, 10))
     {
-        char *filename, *search;
-        ParseParams((char *)line + 10, 2, &filename, &search);
-        Genetics_LoadFASTA(user_data, filename, search);
+        char *filename, *search,*start,*stop;
+        ParseParams((char *)line + 10, 4, &start,&stop, &filename, &search);
+        Genetics_LoadFASTA(user_data, atoi(start), atoi(stop), filename, search);
         return user_data;
     }
     if (!strncasecmp("print", line, 5))
