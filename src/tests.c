@@ -33,47 +33,24 @@ DNA_PRINT_FlAGS GetPrintFlag(char *sp, char *ep)
     return 0;
 }
 
-void *test_genetics(void *user_data, const char *line, size_t size)
+void *test_genetics(void *user_data, const char *line, size_t size, FILE* out)
 {
-    FILE *out = NULL;
     if (!user_data)
     { //init
         return Genetics_New();
     }
     if (line == NULL)
     { //cleanup
-        if (out)
-            fclose(out);
         Genetics_Delete(user_data);
         return NULL;
     }
+    Genetics_SetOutput(user_data, out);
     if (!strncasecmp(line, "echo", 4))
     {
         line += 4;
         while (isspace(*line))
             line++;
         Genetics_Print(user_data, line);
-        return user_data;
-    }
-    if (!strncasecmp("output", line, 6))
-    {
-        char *filename, *params;
-        ParseParams((char *)line + 6, 2, &filename, &params);
-        if (!strcmp(filename, "stdout"))
-        {
-        }
-        FILE *nout = fopen(filename, *params ? params : "w");
-        if (nout)
-        {
-            if (out)
-                fclose(out);
-            out = nout;
-            Genetics_SetOutput(user_data, out);
-        }
-        else
-        {
-            fprintf(stderr, "Error fopening fasta file '%s' : %s\n", filename, strerror(errno));
-        }
         return user_data;
     }
     if (!strncasecmp("load_fasta", line, 10))

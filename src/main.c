@@ -13,7 +13,7 @@
 
 #include "tests.h"
 
-typedef void *(*TFunc)(void *user_data, const char *line, size_t size);
+typedef void *(*TFunc)(void *user_data, const char *line, size_t size, FILE* out);
 struct test_menu
 {
     const char *command;
@@ -39,7 +39,8 @@ static int menu_index = -1;
 #define PROMPT_MAIN COLOR_BLUE "test" COLOR_OFF "$"
 #define PROMPT_CMD COLOR_MAGENTA "%s" COLOR_OFF "$"
 
-bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize)
+
+bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize,FILE** pout)
 {
     size_t term = insize - 1;
     while (isspace(input[term]))
@@ -60,6 +61,27 @@ bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize)
         if (!fromFile)
             puts("Bye!");
         return false;
+    }
+    if (!strncasecmp("output", line, 6))
+    {
+        char *filename, *params;
+        ParseParams((char *)line + 6, 2, &filename, &params);
+        if (!strcmp(filename, "stdout"))
+        {
+        }
+        FILE *nout = fopen(filename, *params ? params : "w");
+        if (nout)
+        {
+            if (*pout != stdout)
+                fclose(*pout);
+            *pout = nout;
+            
+        }
+        else
+        {
+            fprintf(stderr, "Error fopening fasta file '%s' : %s\n", filename, strerror(errno));
+        }
+        return true;
     }
 
     if (menu_index != -1)
@@ -107,11 +129,11 @@ bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize)
 
     if (fromFile)
     {
-        test_menus[menu_index].user_data = test_menus[menu_index].controler(test_menus[menu_index].user_data, line, term);
+        test_menus[menu_index].user_data = test_menus[menu_index].controler(test_menus[menu_index].user_data, line, term, *pout);
     }
     else
     {
-        test_menus[menu_index].user_data = test_menus[menu_index].controler(test_menus[menu_index].user_data, line, term);
+        test_menus[menu_index].user_data = test_menus[menu_index].controler(test_menus[menu_index].user_data, line, term, *pout);
         printf(PROMPT_CMD, test_menus[menu_index].command);
     }
 
@@ -157,11 +179,12 @@ int main(int argc, char **argv)
     ssize_t insize;
     int line_no = 1;
     bool quit = false;
+    FILE *out = stdout;
     if (fInput)
     {
         while (-1 != (insize = getline(&input, &len, fInput)))
         {
-            if (!ProcessNewInput(line_no++, true, input, insize))
+            if (!ProcessNewInput(line_no++, true, input, insize, &out))
             {
                 quit = true;
                 break;
@@ -178,7 +201,7 @@ int main(int argc, char **argv)
 
         while (-1 != (insize = getline(&input, &len, stdin)))
         {
-            if (!ProcessNewInput(line_no++, false, input, insize))
+            if (!ProcessNewInput(line_no++, false, input, insize, &out))
             {
                 quit = true;
                 break;
@@ -186,11 +209,14 @@ int main(int argc, char **argv)
         }
     }
 
+    
     free(input);
     for (int i = 0; test_menus[i].command; i++)
     {
         if (test_menus[menu_index].user_data)
-            test_menus[menu_index].controler(test_menus[menu_index].user_data, NULL,0);
+            test_menus[menu_index].controler(test_menus[menu_index].user_data, NULL,0, out);
     }
+    if(out != stdout)
+        fclose(out);
     return 0;
 }

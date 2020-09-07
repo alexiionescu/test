@@ -506,6 +506,7 @@ static void PrintHeader(GeneticsObj *_this, bool begin, DNA_PRINT_FlAGS flags)
     }
 }
 
+#define END_PRINT_STRING    "\n-------------------------\n\n"
 /**
  * @brief Print DNA Info
  * 
@@ -521,6 +522,12 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
 {
     int pstate = PSTATE_NA;
     size_t printSize = _this->dnaSize;
+    if(printSize == 0) {
+        PrintHeader(_this, true, flags);
+        PrintHeader(_this, false, flags);
+        fputs(END_PRINT_STRING, _this->out);
+        return;
+    }
 
     if (flags & DNA_PRINT_REVERSE)
     {
@@ -531,10 +538,21 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
         {
             printSize--;
             poffset -= 3;
+            if(printSize == 0) {
+                PrintHeader(_this, false, flags);
+                fputs(END_PRINT_STRING, _this->out);
+                return;
+            }
             if (_this->start_codon == 3 && _this->lastCodonBase == CODON_2ndBase)
             {
                 printSize--;
                 poffset -= 3;
+                if (printSize == 0)
+                {
+                    PrintHeader(_this, false, flags);
+                    fputs(END_PRINT_STRING, _this->out);
+                    return;
+                }
             }
             if (3 - _this->start_codon != _this->lastCodonBase / 2){
                 fprintf(_this->out,START_LINE_FMT,poffset);
@@ -588,13 +606,27 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
     }
     else
     {
+        PrintHeader(_this, true, flags);
         if (_this->start_codon != 1 || _this->lastCodonBase != CODON_1stBase)
         {
             printSize--;
+            if (printSize == 0)
+            {
+                PrintHeader(_this, false, flags);
+                fputs(END_PRINT_STRING, _this->out);
+                return;
+            }
+
             if (_this->start_codon == 3 && _this->lastCodonBase == CODON_2ndBase)
                 printSize--;
+            if (printSize == 0)
+            {
+                PrintHeader(_this, false, flags);
+                fputs(END_PRINT_STRING, _this->out);
+                return;
+            }
         }
-        PrintHeader(_this, true, flags);
+        
         size_t poffset = _this->start_codon + _this->inputFileOffset;
         bool printCorrelation = false;
         bool endCorrelation = false;
@@ -643,7 +675,7 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
         }
         PrintHeader(_this, false, flags);
     }
-    fputs("\n-------------------------\n\n", _this->out);
+    fputs(END_PRINT_STRING, _this->out);
 }
 
 /**
