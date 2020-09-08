@@ -115,14 +115,7 @@ void *test_genetics(void *user_data, const char *line, size_t size, FILE* out)
     {
         char *codon_start;
         ParseParams((char *)line + 11, 1, &codon_start);
-        if (*codon_start >= '1' && *codon_start <= '3')
-        {
-            Genetics_SetCodonStart(user_data, *codon_start - '0');
-        }
-        else
-        {
-            fprintf(stderr, "Invalid codon_start. first param must be between 1 and 3\n");
-        }
+        Genetics_SetCodonStart(user_data, atoi(codon_start));
         return user_data;
     }
 
