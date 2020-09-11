@@ -45,19 +45,24 @@ void *test_genetics(void *user_data, const char *line, size_t size, FILE* out)
         return NULL;
     }
     Genetics_SetOutput(user_data, out);
-    if (!strncasecmp(line, "echo", 4))
+    if (!strncasecmp("splice", line, 6))
     {
-        line += 4;
-        while (isspace(*line))
-            line++;
-        Genetics_Print(user_data, line);
+        char* params[100];
+        static const int psize = sizeof(params)/sizeof(char*);
+        size_t spliceData[psize];
+        int n = ParseAllParams((char *)line + 6, psize, params);
+        for(int i = 0;i<n; i++)
+        {
+            spliceData[i] = strtoul(params[i],NULL,10);
+        }
+        Genetics_Splice(user_data, n,spliceData);
         return user_data;
     }
     if (!strncasecmp("load_fasta", line, 10))
     {
         char *filename, *search,*start,*stop;
         ParseParams((char *)line + 10, 4, &start,&stop, &filename, &search);
-        Genetics_LoadFASTA(user_data, atoi(start), atoi(stop), filename, search);
+        Genetics_LoadFASTA(user_data, strtoul(start,NULL,10), strtoul(stop,NULL,10), filename, search);
         return user_data;
     }
     if (!strncasecmp("print", line, 5))
@@ -149,4 +154,23 @@ void ParseParams(char *input, int n, ...)
         input++;
     *p = input;
     va_end(args);
+}
+
+int ParseAllParams(char* input, int argc, char** argv)
+{
+    int n = 0;
+    while(*input && n < argc)
+    {
+        while (*input && isspace(*input))
+            input++;
+        argv[n++] = input;  
+        while (*input && !isspace(*input))
+            input++;
+        if (*input)
+        {
+            *input = 0;
+            input++;
+        }
+    }
+    return n;
 }

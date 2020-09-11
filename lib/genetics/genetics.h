@@ -12,6 +12,7 @@ size_t Genetics_AddDNA(GeneticsObj *_this, const char *code);
 void Genetics_StopDNA(GeneticsObj *_this);
 bool Genetics_DNAInput(GeneticsObj *_this);
 void Genetics_LoadFASTA(GeneticsObj *_this, size_t start,size_t stop, const char *filename, const char *search);
+void Genetics_Splice(GeneticsObj *_this, int n, size_t* data);
 
 #define DNA_PRINT_REVERSE 0x0001
 #define DNA_PRINT_COMPLEMENT 0x0002

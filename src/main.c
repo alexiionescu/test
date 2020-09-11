@@ -51,9 +51,12 @@ bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize,FILE
     term++;
     char *line = input;
     while (isspace(*line))
+    {
         line++;
+        term--;
+    }
 
-    if (*line == '#')
+    if (*line == '#' || *line == '\0')
         return true;
 
     if (!strncasecmp(line, "quit", 4))
@@ -83,6 +86,17 @@ bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize,FILE
         }
         return true;
     }
+    if (!strncasecmp(line, "echo", 4))
+    {
+        line += 4;
+        while (isspace(*line))
+            line++;
+        fputs(line,*pout);
+        fputc('\n',*pout);
+        if (!fromFile)
+            fputs(PROMPT_MAIN, stdout);
+        return true;
+    }
 
     if (menu_index != -1)
     {
@@ -95,19 +109,9 @@ bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize,FILE
         }
     }
 
+    
     if (menu_index == -1)
     {
-        if (!strncasecmp(line, "echo", 4))
-        {
-            line += 4;
-            while (isspace(*line))
-                line++;
-            puts(line);
-            if (!fromFile)
-                fputs(PROMPT_MAIN, stdout);
-            return true;
-        }
-
         for (int i = 0; test_menus[i].command; i++)
         {
             if (!strcasecmp(line, test_menus[i].command))
