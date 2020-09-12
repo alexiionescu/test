@@ -33,6 +33,29 @@ DNA_PRINT_FlAGS GetPrintFlag(char *sp, char *ep)
     return 0;
 }
 
+menu_help_item MenuGenetics[] =
+{
+    { "5' | 3'", "[...]" , "start/end dna sequence."
+            HELP_START_LINE "Everything between this 2 commands is considered dna sequence."
+            HELP_START_LINE "Can be used on the same line for example 5'agtaaggcc3'."},
+    { "load_fasta", "start stop filename [search]" , "load fasta file from start to stop offset."
+            HELP_START_LINE "Use 0 for start/stop to load all."
+            HELP_START_LINE "Option <search> option will search for fasta > lines and if found will start from next line."},
+    { "splice", "[s1 s2 s3 s4 ...]" , "splice dna sequence based on exons boundaries"
+            HELP_START_LINE "exons are [start s1] [s2 s3] ... [sN stop]"
+            HELP_START_LINE "introns are [s1+1 s2-1] [s3+1 s4-1] ..."},
+    { "print", "[print flags]", "print dna sequence. Flags are:"
+            HELP_START_LINE "\t translate : translate to proteins (single letters)"
+            HELP_START_LINE "\t translate_long : translate to proteins (3 letters)"
+            HELP_START_LINE "\t compl : complement dna sequence"
+            HELP_START_LINE "\t codon_start : set codon reading frame (default 1)"
+            HELP_START_LINE "\t rev : reverse dna sequence. Use with 'compl' and translate for reverse strand translation."
+            HELP_START_LINE "\t cor : use with translate to show dna sequence and translation correlated. Does not work with splice."
+            HELP_START_LINE "\t rna : print rna instead of dna (T becomes U)"
+            },
+    {}
+};
+
 void *test_genetics(void *user_data, const char *line, size_t size, FILE* out)
 {
     if (!user_data)
@@ -123,10 +146,23 @@ void *test_genetics(void *user_data, const char *line, size_t size, FILE* out)
         Genetics_SetCodonStart(user_data, atoi(codon_start));
         return user_data;
     }
+    if(PrintMenuHelp(line,MenuGenetics)) return user_data;
 
-    if (Genetics_DNAInput(user_data))
+    int dir;
+    if (DNA_DIR_NONE != (dir = Genetics_DNAInput(user_data)))
     {
         Genetics_AddDNA(user_data, line);
+        if(dir == DNA_DIR_5_TO_3)
+        {
+            if (line[size - 1] == '\'' && line[size - 2] == '3')
+                Genetics_StopDNA(user_data);
+        }
+        else
+        {
+            if (line[size - 1] == '\'' && line[size - 2] == '5')
+                Genetics_StopDNA(user_data);
+        }
+        
     }
     return user_data;
 }
@@ -173,4 +209,27 @@ int ParseAllParams(char* input, int argc, char** argv)
         }
     }
     return n;
+}
+
+void PrintHelp(menu_help_item* menu)
+{
+    while(menu->command)
+    {
+        printf(COLOR_HIGHLIGHT "%s" COLOR_OFF " %s" HELP_START_LINE "%s\n",menu->command, menu->params, menu->description);
+        menu++;
+    }
+}
+
+bool PrintMenuHelp(const char* line, menu_help_item* menu_help)
+{
+    if (!strncasecmp(line, "help", 4))
+    {
+        PrintHelp(menu_help);
+        puts("-------");
+        PrintHelp(MenuShared);
+        PrintHelp(MenuGlobal);
+        return true;
+    }
+
+    return false;
 }

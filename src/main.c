@@ -26,19 +26,23 @@ static struct test_menu test_menus[] = {
     {}};
 static int menu_index = -1;
 
-#define COLOR_OFF "\001\x1B[0m\002"
-#define COLOR_RED "\001\x1B[0;91m\002"
-#define COLOR_GREEN "\001\x1B[0;92m\002"
-#define COLOR_YELLOW "\001\x1B[0;93m\002"
-#define COLOR_BLUE "\001\x1B[0;94m\002"
-#define COLOR_MAGENTA "\001\x1B[0;95m\002"
-#define COLOR_BOLDGRAY "\001\x1B[1;30m\002"
-#define COLOR_BOLDWHITE "\001\x1B[1;37m\002"
-#define COLOR_HIGHLIGHT "\001\x1B[1;39m\002"
 
 #define PROMPT_MAIN COLOR_BLUE "test" COLOR_OFF "$"
 #define PROMPT_CMD COLOR_MAGENTA "%s" COLOR_OFF "$"
 
+menu_help_item MenuShared[] = 
+{
+    { "back", "" , "back to previous menu"},
+    {}
+};
+menu_help_item MenuGlobal[] =
+{
+    { "echo", "[...]" , "echo params to output file"},
+    { "output", "filename" , "set output to filename (default stdout)"},
+    { "quit", "" , "quit application"},
+    { "help", "" , "show help"},
+    {}
+};
 
 bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize,FILE** pout)
 {
@@ -59,12 +63,7 @@ bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize,FILE
     if (*line == '#' || *line == '\0')
         return true;
 
-    if (!strncasecmp(line, "quit", 4))
-    {
-        if (!fromFile)
-            puts("Bye!");
-        return false;
-    }
+    
     if (!strncasecmp("output", line, 6))
     {
         char *filename, *params;
@@ -97,10 +96,17 @@ bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize,FILE
             fputs(PROMPT_MAIN, stdout);
         return true;
     }
+    if (!strncasecmp(line, "quit", 4))
+    {
+        if (!fromFile)
+            puts("Bye!");
+        return false;
+    }
+    
 
     if (menu_index != -1)
     {
-        if (!strncasecmp(line, "back", 4) || !strncasecmp(line, "exit", 4))
+        if (!strncasecmp(line, "back", 4))
         {
             menu_index = -1;
             if (!fromFile)
@@ -108,10 +114,17 @@ bool ProcessNewInput(int line_no, bool fromFile, char *input, size_t insize,FILE
             return true;
         }
     }
-
-    
+ 
     if (menu_index == -1)
-    {
+    {  
+        if (!strncasecmp(line, "help", 4))
+        {
+            for (int i = 0; test_menus[i].command; i++)
+                printf(COLOR_RED "%s" COLOR_OFF " enter menu %s\n",test_menus[i].command,test_menus[i].command);
+            puts("-------");
+            PrintHelp(MenuGlobal);
+            return true;
+        }
         for (int i = 0; test_menus[i].command; i++)
         {
             if (!strcasecmp(line, test_menus[i].command))

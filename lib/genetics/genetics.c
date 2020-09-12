@@ -213,12 +213,12 @@ void Genetics_StopDNA(GeneticsObj *_this)
  * @brief Check DNA Input Status
  * 
  * @param _this genetics object
- * @return true if DNA Input is Started, false otherwise
+ * @return DNA_DIR_NONE if not started, direction DNA_DIR_5_TO_3 or DNA_DIR_3_TO_5 otherwise
  * 
  */
-bool Genetics_DNAInput(GeneticsObj *_this)
+int Genetics_DNAInput(GeneticsObj *_this)
 {
-    return _this->dnaInput;
+    return _this->dnaInput ? _this->dnaDir : DNA_DIR_NONE;
 }
 
 #define PSTATE_NA -1

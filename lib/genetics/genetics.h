@@ -3,14 +3,15 @@ typedef struct _GeneticsObj GeneticsObj;
 GeneticsObj *Genetics_New();
 void Genetics_Delete(GeneticsObj *_this);
 
-#define DNA_DIR_5_TO_3 0
-#define DNA_DIR_3_TO_5 1
+#define DNA_DIR_NONE   0
+#define DNA_DIR_5_TO_3 1
+#define DNA_DIR_3_TO_5 2
 typedef char DNA_DIR;
 
 size_t Genetics_StartDNA(GeneticsObj *_this, DNA_DIR dir, const char *code);
 size_t Genetics_AddDNA(GeneticsObj *_this, const char *code);
 void Genetics_StopDNA(GeneticsObj *_this);
-bool Genetics_DNAInput(GeneticsObj *_this);
+int Genetics_DNAInput(GeneticsObj *_this);
 void Genetics_LoadFASTA(GeneticsObj *_this, size_t start,size_t stop, const char *filename, const char *search);
 void Genetics_Splice(GeneticsObj *_this, int n, size_t* data);
 
