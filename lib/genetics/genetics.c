@@ -22,9 +22,9 @@
  *    A->2 10
  *    G->3 11
  */
-
 #define CODON(b1,b2,b3) (((b1 & 0x3)<<4)|((b2 & 0x3)<<2)|(b3 & 0x3))
-#define COMPLEMENT_CODON(codon) (codon ^ 0x2A)
+#define COMPLEMENT_CODON(codon) (codon ^ 0x2A)  // XOR 101010   T <-> A, C <-> G
+#define COMPLEMENT(b) (b ^ 0x2)                 // XOR     10   T <-> A, C <-> G
 
 #define DNA_BUFFER_START 0
 struct _GeneticsObj
@@ -43,7 +43,33 @@ struct _GeneticsObj
     int spliceSize;
 };
 
-static int transl_table = 0;
+static uint8_t START_CODON[3];
+/**
+ * @brief static function that setup translation table
+ * 
+ * @param n translation table > 0
+ */
+void Genetics_SetTranslationTable(int n)
+{
+    static int transl_table = 0;
+    if (n > 0 && n != transl_table)
+    {
+        transl_table = n;
+        int s = parse_transl_table(transl_table);
+        if(s == 0)
+        {
+            fputs("Translation tables have no start codons!!!\n",stderr);
+        }
+        else
+        {
+            START_CODON[0] = (s & (0x3 << 4)) >> 4;
+            START_CODON[1] = (s & (0x3 << 2)) >> 2;
+            START_CODON[2] = s & 0x3;
+        }
+    }
+}
+
+
 /**
  * @brief Create a new genetics object.
  *        Use Genetics_Delete() to delete.
@@ -52,12 +78,7 @@ static int transl_table = 0;
  */
 GeneticsObj *Genetics_New()
 {
-    if (0 == transl_table)
-    {
-        transl_table = 1;
-        parse_transl_table(transl_table);
-    }
-
+    Genetics_SetTranslationTable(1);
     GeneticsObj *_this = (GeneticsObj *)malloc(sizeof(GeneticsObj));
     memset(_this, 0, sizeof(GeneticsObj));
     _this->out = stdout;
@@ -97,6 +118,146 @@ void Genetics_SetCodonStart(GeneticsObj *_this, int n)
 {
     if(n >= 1 && n < _this->dnaSize)
         _this->start_codon = n;
+}
+
+/**
+ * @brief Find Start Codon
+ * 
+ * @param _this genetics object
+ * @param flags \n 
+ *          DNA_PRINT_REVERSE: Find on Reverse strand; \n 
+ */
+bool Genetics_FindStart(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
+{
+    uint8_t s1,s2,s3;
+    if(flags&DNA_PRINT_COMPLEMENT)
+    {
+        s1 = COMPLEMENT(START_CODON[0]);   
+        s2 = COMPLEMENT(START_CODON[1]);   
+        s3 = COMPLEMENT(START_CODON[2]); 
+    }
+    else
+    {
+        s1 = START_CODON[0];   
+        s2 = START_CODON[1];   
+        s3 = START_CODON[2];   
+    }
+     
+    if (_this->dnaDir == DNA_DIR_3_TO_5)
+    {
+        flags ^= DNA_PRINT_REVERSE;
+    }
+
+    if (flags & DNA_PRINT_REVERSE)
+    {
+        size_t poffset = _this->inputFileOffset + _this->dnaSize;
+        int splice = _this->spliceSize - 1;
+        while(_this->spliceData && splice > 0 && poffset < _this->spliceData[splice]) 
+            splice--;
+        for (int r = _this->dnaSize; r >= 2; r--, poffset --)
+        {
+            uint8_t b1, b2, b3;
+            b1 = _this->dna[r];
+            b2 = _this->dna[r - 1];
+            b3 = _this->dna[r - 2];
+            int cut = 0;
+            if (_this->spliceData && splice > 0)
+            {
+                int s = _this->spliceData[splice] - poffset;
+                if (s >= -1) // could be -1, 0, 1
+                {
+                    cut = _this->spliceData[splice] - _this->spliceData[splice - 1];
+                    if (s == 1)
+                    {
+                        if (r - cut - 2 < 0)
+                            break;
+                        b1 = _this->dna[r - cut];
+                        b2 = _this->dna[r - cut - 1];
+                        b3 = _this->dna[r - cut - 2];
+                        if (s1 == b1 && s2 == b2 && s3 == b3)
+                        {
+                            _this->start_codon = _this->dnaSize - r - 2;
+                            return true;
+                        }
+                        r -= cut - 2;
+                        poffset -= cut - 2;
+                        splice -= 2;
+                        continue;
+                    }
+                    if (s == 0)
+                    {
+                        if (r - cut < 0)
+                            break;
+                        b2 = _this->dna[r - cut];
+                    }
+                    if (r - cut - 1 < 0)
+                        break;
+                    b3 = _this->dna[r - cut - 1];
+                }
+            }
+            if (s1 == b1 && s2 == b2 && s3 == b3)
+            {
+                _this->start_codon = _this->dnaSize - r;
+                return true;
+            }
+        }
+    }
+    else
+    {
+        size_t poffset = _this->inputFileOffset + 1;
+        int splice = 0;
+        while(_this->spliceData && splice < _this->spliceSize && poffset > _this->spliceData[splice]) 
+            splice++;
+        for (int i = 0; i < _this->dnaSize - 2; i++, poffset++)
+        {
+            uint8_t b1, b2, b3;
+            b1 = _this->dna[i];
+            b2 = _this->dna[i + 1];
+            b3 = _this->dna[i + 2];
+            int cut = 0;
+            if (_this->spliceData && splice < _this->spliceSize)
+            {
+                int s = poffset - _this->spliceData[splice];
+                if (s >= -1) // could be -1, 0, 1
+                {
+                    cut = _this->spliceData[splice + 1] - _this->spliceData[splice];
+                    if (s == 1)
+                    {
+                        if (i + cut + 1 >= _this->dnaSize)
+                            break;
+                        b1 = _this->dna[i + cut -1];
+                        b2 = _this->dna[i + cut];
+                        b3 = _this->dna[i + cut + 1];
+                        if (s1 == b1 && s2 == b2 && s3 == b3)
+                        {
+                            _this->start_codon = i-2;
+                            return true;
+                        }
+                        i += cut - 2;
+                        poffset += cut - 2;
+                        splice += 2;
+                        continue;
+                    }
+                    if (s == 0)
+                    {
+                        if (i + cut >= _this->dnaSize)
+                            break;
+                        b2 = _this->dna[i + cut];
+                    }
+                    if (i + 1 + cut >= _this->dnaSize)
+                        break;
+                    b3 = _this->dna[i + 1 + cut];
+                }
+            }
+            if (s1 == b1 && s2 == b2 && s3 == b3)
+            {
+                _this->start_codon = i + 1;
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -362,7 +523,10 @@ static void PrintHeader(GeneticsObj *_this, bool begin, DNA_PRINT_FlAGS flags)
     }
     if (begin && _this->start_codon != 1)
     {
-        fprintf(_this->out, " /codon_start=%d", _this->start_codon);
+        if(flags & DNA_PRINT_REVERSE)
+            fprintf(_this->out, " /codon_start <%d (%lu)", _this->start_codon, _this->inputFileOffset + 1 +_this->dnaSize - _this->start_codon);
+        else
+            fprintf(_this->out, " /codon_start %d> (%lu)", _this->start_codon, _this->inputFileOffset + _this->start_codon);
     }
 }
 
@@ -388,6 +552,11 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
         fputs(END_PRINT_STRING, _this->out);
         return;
     }
+    if(_this->dnaDir == DNA_DIR_3_TO_5)
+    {
+        flags ^= DNA_PRINT_REVERSE;
+    }
+
     if(flags&DNA_PRINT_TRANSLATE_CORRELATE && _this->spliceData){
         fprintf(stderr,"ERROR: Splice is not supported with correlate translation\n");
         return;
@@ -406,6 +575,8 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
         size_t poffset = _this->inputFileOffset + 1 +_this->dnaSize - _this->start_codon;   
         size_t cor_r = _this->dnaSize - _this->start_codon, cor_poffset = poffset;
         int splice = _this->spliceSize - 1;
+        while(_this->spliceData && splice > 0 && poffset < _this->spliceData[splice]) 
+            splice--;
         for (int r = cor_r; r >= 2; r-=3, poffset -= 3, printOffset++)
         {
             if(flags&DNA_PRINT_TRANSLATE_CORRELATE && printOffset > 0 && printOffset % CODONS_PER_LINE == 0 && !endCorrelation) 
@@ -484,6 +655,8 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
         size_t poffset = _this->inputFileOffset + _this->start_codon;
         size_t cor_i = _this->start_codon - 1, cor_poffset = poffset;
         int splice = 0;
+        while(_this->spliceData && splice < _this->spliceSize && poffset > _this->spliceData[splice]) 
+            splice++;
         for (size_t i = cor_i; i < _this->dnaSize - 2; i+=3, poffset += 3, printOffset++)
         {
             if(flags&DNA_PRINT_TRANSLATE_CORRELATE && printOffset > 0 && printOffset % CODONS_PER_LINE == 0 && !endCorrelation) 
@@ -510,7 +683,6 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
             int cut = 0;
             if(_this->spliceData && splice < _this->spliceSize)
             {
-                fflush(_this->out);
                 int s = poffset - _this->spliceData[splice];
                 if(s >= -1) // could be -1, 0, 1
                 {
@@ -560,16 +732,6 @@ void Genetics_PrintDNA(GeneticsObj *_this, DNA_PRINT_FlAGS flags)
     fputs(END_PRINT_STRING, _this->out);
 }
 
-/**
- * @brief print to current ouput file
- * 
- * @param _this genetics object
- * @param s string to print
- */
-void Genetics_Print(GeneticsObj *_this, const char *s)
-{
-    fputs(s, _this->out);
-}
 /**
  * @brief Load a FASTA file
  * 
@@ -668,8 +830,20 @@ void Genetics_Splice(GeneticsObj *_this, int n, size_t* data)
     {
         if(_this->spliceData) 
             free(_this->spliceData);
-        _this->spliceSize = n;
+        _this->spliceSize = 0;
         _this->spliceData = malloc(n * sizeof(size_t));
-        memcpy(_this->spliceData,data,n * sizeof(size_t));
+        for(int i=0; i<n;i++)
+        {
+            int k=0;
+            for(;k<_this->spliceSize; k++)
+            {
+                if(_this->spliceData[k] > data[i]) break;
+            }
+            if(_this->spliceSize > k)
+                memmove(_this->spliceData + k + 1, _this->spliceData + k,(_this->spliceSize - k) * sizeof(size_t));
+            _this->spliceData[k] = data[i];
+            _this->spliceSize++;
+        }
+        
     }
 }

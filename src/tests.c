@@ -16,19 +16,19 @@
 
 #include "lib/genetics/genetics.h"
 
-DNA_PRINT_FlAGS GetPrintFlag(char *sp, char *ep)
+DNA_PRINT_FlAGS GetPrintFlag(char *sp)
 {
-    if (!strncasecmp("translate", sp, ep - sp))
+    if (!strcasecmp("translate", sp))
         return DNA_PRINT_TRANSLATE;
-    if (!strncasecmp("translate_long", sp, ep - sp))
+    if (!strcasecmp("translate_long", sp))
         return DNA_PRINT_TRANSLATE_LONG;
-    if (!strncasecmp("compl", sp, ep - sp))
+    if (!strcasecmp("compl", sp))
         return DNA_PRINT_COMPLEMENT;
-    if (!strncasecmp("rev", sp, ep - sp))
+    if (!strcasecmp("rev", sp))
         return DNA_PRINT_REVERSE;
-    if (!strncasecmp("rna", sp, ep - sp))
+    if (!strcasecmp("rna", sp))
         return DNA_PRINT_RNA;
-    if (!strncasecmp("cor", sp, ep - sp))
+    if (!strcasecmp("cor", sp))
         return DNA_PRINT_TRANSLATE_CORRELATE;  
     return 0;
 }
@@ -44,6 +44,9 @@ menu_help_item MenuGenetics[] =
     { "splice", "[s1 s2 s3 s4 ...]" , "splice dna sequence based on exons boundaries"
             HELP_START_LINE "exons are [start s1] [s2 s3] ... [sN stop]"
             HELP_START_LINE "introns are [s1+1 s2-1] [s3+1 s4-1] ..."},
+    { "codon_start", "s" , "set codon start where operations print operations will start"},
+    { "find_start", "[rev]", "find codon start and set codon_start accordingly"
+            HELP_START_LINE "use rev to find start on the reverse strand"},
     { "print", "[print flags]", "print dna sequence. Flags are:"
             HELP_START_LINE "\t translate : translate to proteins (single letters)"
             HELP_START_LINE "\t translate_long : translate to proteins (3 letters)"
@@ -88,26 +91,29 @@ void *test_genetics(void *user_data, const char *line, size_t size, FILE* out)
         Genetics_LoadFASTA(user_data, strtoul(start,NULL,10), strtoul(stop,NULL,10), filename, search);
         return user_data;
     }
+    if (!strncasecmp("find_start", line, 10))
+    {
+        DNA_PRINT_FlAGS flags = 0;
+        char* params[100];
+        static const int psize = sizeof(params)/sizeof(char*);
+        int n = ParseAllParams((char *)line + 10, psize, params);
+        for(int i = 0;i<n; i++)
+        {
+            flags |= GetPrintFlag(params[i]);
+        }
+        Genetics_FindStart(user_data, flags);
+        return user_data;
+    }
     if (!strncasecmp("print", line, 5))
     {
         DNA_PRINT_FlAGS flags = 0;
-        char *sp = (char *)line + 5;
-        char *ep = sp;
-        while (*ep)
+        char* params[100];
+        static const int psize = sizeof(params)/sizeof(char*);
+        int n = ParseAllParams((char *)line + 5, psize, params);
+        for(int i = 0;i<n; i++)
         {
-            if (isspace(*ep))
-            {
-                if (sp != ep)
-                {
-                    flags |= GetPrintFlag(sp, ep);
-                    sp = ep;
-                }
-                sp++;
-            }
-            ep++;
+            flags |= GetPrintFlag(params[i]);
         }
-        if (sp != ep)
-            flags |= GetPrintFlag(sp, ep);
         Genetics_PrintDNA(user_data, flags);
         return user_data;
     }

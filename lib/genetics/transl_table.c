@@ -48,18 +48,30 @@ const char *TRANSL_TABLE_LONG[64];
 char DNA_STRINGS[64][4];
 char RNA_STRINGS[64][4];
 
-void parse_transl_table(int n)
+/**
+ * @brief prepare translation table for a specific genetic code
+ * 
+ * @param n translation table number (default 1)
+ * @return int start codon index
+ */
+int parse_transl_table(int n)
 {
+    if( n < 1 || n > sizeof(transl_tables)/sizeof(char*) )
+        n = 1;
+
     const char *tbl = transl_tables[n - 1];
     char *aas = 2 + strchr(tbl, '=');
     char *starts = 2 + strchr(aas, '=');
     char *base1 = 2 + strchr(starts, '=');
     char *base2 = 2 + strchr(base1, '=');
     char *base3 = 2 + strchr(base2, '=');
+    int s = 0;
 
     for (int i = 0; i < 64; i++)
     {
         STARTS_TABLE[i] = starts[i];
+        if(starts[i] == 'M')
+            s = i;
         TRANSL_TABLE[i] = aas[i];
         TRANSL_TABLE_LONG[i] = AAS_LONG[aas[i] - 'A'];
         if (base1[i] == 'T')
@@ -97,4 +109,6 @@ void parse_transl_table(int n)
         DNA_STRINGS[i][3] = 0;
         RNA_STRINGS[i][3] = 0;
     }
+
+    return s;
 }
